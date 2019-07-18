@@ -26,7 +26,7 @@ def run(c, path):
     c.run('conda info --envs --json', replace_env=False, out_stream=stream)
     info = json.loads(stream.getvalue())
     envdir = next(iter(p for p in (Path(s) for s in info['envs']) if p.name == cfg.CONDA_ENV_NAME))
-    python = envdir / 'python.exe' if os.name == 'nt' else envdir / 'bin' / 'python'
+    python = (envdir / 'python.exe') if (os.name == 'nt') else (envdir / 'bin' / 'python')
     if not python.exists():
         raise ValueError('Unable to locate conda environment python')
 
