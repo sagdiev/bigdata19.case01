@@ -62,8 +62,8 @@ def scrape_descriptions_async():
     progress.close()
 
 
-def scrape_descriptions_sync():
-    "DZ Scrape companies descriptions. sync"
+#def scrape_descriptions_sync():
+    #"DZ Scrape companies descriptions. sync"
     # TODO: Second DZ с помощь urllib
     # прочитать Symbols, for symbol in tqdm(symbols)
     # исользовать urllib get запросы на yahoo и полученное записывать в файл с помощью
