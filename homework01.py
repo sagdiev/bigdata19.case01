@@ -15,33 +15,25 @@ def scrape_descriptions_sync():
     }
 
     symbols = read_symbols()
-    #symbol = "AAPL"
-    #progress = tqdm(total=len(symbols), file=sys.stdout, disable=False)
     YAHOO_HTMLS.mkdir(parents=True, exist_ok=True)
 
 
     for symbol in tqdm(symbols):
-        #myurl = "https://finance.yahoo.com/quote/AAPL/profile?p=AAPL"
+        #Examplt myurl = "https://finance.yahoo.com/quote/AAPL/profile?p=AAPL"
         myurl = f'https://finance.yahoo.com/quote/{symbol}/profile?p={symbol}'
 
         try:
             req = request.Request(myurl, headers=myheader)
             response = request.urlopen(req)
             text = response.readlines()
-            text2 = response.read()
-
-            print(myurl)
-
-            print(text2)
-            #for line in text:
-                #print(line)
 
         except Exception:
             print("Error occuried during web request!!")
             print(sys.exc_info()[1])
 
         f = open(YAHOO_HTMLS / f'{symbol}.html', 'wb')
-        f.write(text2)
+        for line in text:
+            f.write(line)
 
 def main():
     scrape_descriptions_sync()
