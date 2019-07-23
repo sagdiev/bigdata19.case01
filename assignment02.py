@@ -1,5 +1,5 @@
 from yahoo import read_symbols, YAHOO_HTMLS
-from urllib import request, parse
+from urllib import request
 from tqdm import tqdm
 import sys
 
@@ -19,7 +19,7 @@ def scrape_descriptions_sync():
 
 
     for symbol in tqdm(symbols):
-        #Examplt myurl = "https://finance.yahoo.com/quote/AAPL/profile?p=AAPL"
+        #Example myurl = "https://finance.yahoo.com/quote/AAPL/profile?p=AAPL"
         myurl = f'https://finance.yahoo.com/quote/{symbol}/profile?p={symbol}'
 
         try:
