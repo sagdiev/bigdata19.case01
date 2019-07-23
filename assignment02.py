@@ -1,3 +1,15 @@
+"""
+Assignment 02
+=============
+
+The goal of this assignment is to implement synchronous scraping using standard python modules,
+and compare the scraping speed to asynchronous mode.
+
+Run this code with
+
+    > fab run assignment02.py
+"""
+
 from yahoo import read_symbols, YAHOO_HTMLS
 from urllib import request
 from tqdm import tqdm
@@ -35,8 +47,10 @@ def scrape_descriptions_sync():
         for line in text:
             f.write(line)
 
+
 def main():
     scrape_descriptions_sync()
+
 
 if __name__ == '__main__':
     main()
