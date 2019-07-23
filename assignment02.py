@@ -37,15 +37,16 @@ def scrape_descriptions_sync():
         try:
             req = request.Request(myurl, headers=myheader)
             response = request.urlopen(req)
-            text = response.readlines()
+            text = response.read()
+            response.close()
 
         except Exception:
             print("Error occuried during web request!!")
             print(sys.exc_info()[1])
 
         f = open(YAHOO_HTMLS / f'{symbol}.html', 'wb')
-        for line in text:
-            f.write(line)
+        f.write(text)
+        f.close()
 
 
 def main():
