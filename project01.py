@@ -13,28 +13,26 @@ from tqdm import tqdm
 
 import config as cfg
 
-YAHOO_ARCH = cfg.BUILDDIR / 'yahoo.tbz2'
-YAHOO_HTMLS = cfg.BUILDDIR / 'yahoo_html'
-YAHOO_PARQUET = cfg.BUILDDIR / 'yahoo.parquet'
+PROJECT_ARCH = cfg.BUILDDIR / 'project01.tbz2'
+PROJECT_HTMLS = cfg.BUILDDIR / 'project01_html'
+PROJECT_PARQUET = cfg.BUILDDIR / 'project01.parquet'
 
 
-NASDAQ_FILES = (
-    cfg.DATADIR / 'nasdaq' / 'amex.csv',
-    cfg.DATADIR / 'nasdaq' / 'nasdaq.csv',
-    cfg.DATADIR / 'nasdaq' / 'nyse.csv',
+PROJECT_LIST_FILES = (
+    cfg.DATADIR / 'project01' / 'forum_list.csv',
     )
 
 
 def read_symbols():
-    """Read symbols from NASDAQ dataset"""
+    """Read symbols from FORUM Lists dataset"""
 
     symbols = set()
 
-    for filename in NASDAQ_FILES:
+    for filename in PROJECT_LIST_FILES:
         with open(filename) as f:
             reader = csv.DictReader(f)
             for row in reader:
-                symbols.add(row['Symbol'].upper().strip())
+                symbols.add(row['topic_id'].upper().strip())
 
     return list(sorted(symbols))
 
@@ -44,22 +42,19 @@ def scrape_descriptions_async():
 
     symbols = read_symbols()
     progress = tqdm(total=len(symbols), file=sys.stdout, disable=False)
-    YAHOO_HTMLS.mkdir(parents=True, exist_ok=True)
+    PROJECT_HTMLS.mkdir(parents=True, exist_ok=True)
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.1 Safari/605.1.15',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36',
         }
 
     async def fetch(symbol, session):
-        async with session.get(f'https://finance.yahoo.com/quote/{symbol}/profile?p={symbol}') as response:
+        async with session.get(f'https://forum.bits.media/index.php?/topic/{symbol}/') as response:
             text = await response.read()
-            async with aiofiles.open(YAHOO_HTMLS / f'{symbol}.html', 'wb') as f:
+            async with aiofiles.open(PROJECT_HTMLS / f'{symbol}.html', 'wb') as f:
                 await f.write(text)
             progress.update(1)
 
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36'
-    }
 
     async def run(symbols):
         async with ClientSession(headers=headers) as session:
@@ -79,7 +74,7 @@ def compress_descriptions(encoding='utf-8', batch_size=1000, compression='BROTLI
 
     def read_incremental():
         """Incremental generator of batches"""
-        with tarfile.open(YAHOO_ARCH) as archive:
+        with tarfile.open(PROJECT_ARCH) as archive:
             batch = defaultdict(list)
             for member in tqdm(archive):
                 if member.isfile() and member.name.endswith('.html'):
@@ -94,7 +89,7 @@ def compress_descriptions(encoding='utf-8', batch_size=1000, compression='BROTLI
     writer = None
     for batch in read_incremental():
         if writer is None:
-            writer = pq.ParquetWriter(YAHOO_PARQUET, batch.schema, use_dictionary=False, compression=compression, flavor={'spark'})
+            writer = pq.ParquetWriter(PROJECT_PARQUET, batch.schema, use_dictionary=False, compression=compression, flavor={'spark'})
         writer.write_table(batch)
     writer.close()
 
@@ -102,18 +97,18 @@ def compress_descriptions(encoding='utf-8', batch_size=1000, compression='BROTLI
 def decompress_descriptions(encoding='utf-8'):
     """Convert parquet to tarfile"""
 
-    pf = pq.ParquetFile(YAHOO_PARQUET)
+    pf = pq.ParquetFile(PROJECT_PARQUET)
 
     progress = tqdm(file=sys.stdout, disable=False)
 
-    with tarfile.open(YAHOO_ARCH, 'w:bz2') as archive:
+    with tarfile.open(PROJECT_ARCH, 'w:bz2') as archive:
         for i in range(pf.metadata.num_row_groups):
             table = pf.read_row_group(i)
             columns = table.to_pydict()
             for symbol, html in zip(columns['symbol'], columns['html']):
                 bytes = html.encode(encoding)
                 s = io.BytesIO(bytes)
-                tarinfo = tarfile.TarInfo(name=f'yahoo/{symbol}.html')
+                tarinfo = tarfile.TarInfo(name=f'topic/{symbol}.html')
                 tarinfo.size = len(bytes)
                 archive.addfile(tarinfo=tarinfo, fileobj=s)
                 progress.update(1)
