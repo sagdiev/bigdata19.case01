@@ -149,6 +149,34 @@ def parse_descriptions(src=YAHOO_PARQUET, dst=YAHOO_DATA):
                     progress.update()
 
 
+def parse_descriptions(src=YAHOO_PARQUET, dst=YAHOO_DATA):
+    """Parse scraped pages."""
+
+    reader = pq.ParquetFile(src)
+
+    with tqdm(total=reader.metadata.num_rows) as progress:
+
+        with open(dst, 'w', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=['symbol', 'sector', 'industry', 'employees', 'description'])
+            writer.writeheader()
+
+            for g in range(reader.metadata.num_row_groups):
+                table = reader.read_row_group(g).to_pydict()
+                for symbol, html in zip(table['symbol'], table['html']):
+                    tree = lxml.html.fromstring(html)
+
+                    row = {'symbol': symbol.strip()}
+                    row['description'] = '\n'.join(tree.xpath('//section[h2//*[text()="Description"]]/p/text()'))
+                    info = (tree.xpath('//div[@class="asset-profile-container"]//p[span[text()="Sector"]]') or [None])[0]
+                    if info is not None:
+                        row['sector'] = (info.xpath('./span[text()="Sector"]/following-sibling::span[1]/text()') or [''])[0]
+                        row['industry'] = (info.xpath('./span[text()="Industry"]/following-sibling::span[1]/text()') or [''])[0]
+                        row['employees'] = (info.xpath('./span[text()="Full Time Employees"]/following-sibling::span[1]/span/text()') or [''])[0].replace(',', '')
+
+                    writer.writerow(row)
+                    progress.update()
+
+
 def main():
     scrape_descriptions_async()
 
