@@ -36,8 +36,8 @@ import config as cfg
 
 PROJECT_ARCH = cfg.BUILDDIR / 'project02.tbz2'
 PROJECT_HTMLS = cfg.BUILDDIR / 'project02_html'
-PROJECT_PARQUET = cfg.BUILDDIR / 'project02.parquet'
-DATA_FILE = cfg.BUILDDIR / 'data.parquet'
+PROJECT_PARQUET = cfg.BUILDDIR / 'data.parquet'
+PROJECT_PARQUET_FILE = cfg.BUILDDIR / 'project02.parquet'
 
 PROJECT_LIST_FILES = (
     cfg.DATADIR / 'project02' / 'forum_list.csv',
@@ -167,7 +167,7 @@ def compress_descriptions(encoding='utf-8', batch_size=1000, compression='BROTLI
 def decompress_descriptions(encoding='utf-8'):
     """Convert parquet to tarfile"""
 
-    pf = pq.ParquetFile(DATA_FILE)
+    pf = pq.ParquetFile(PROJECT_PARQUET_FILE)
 
     progress = tqdm(file=sys.stdout, disable=False)
 
@@ -187,7 +187,7 @@ def decompress_descriptions(encoding='utf-8'):
 
 
 def main():
-    scrape_descriptions_async()
+    scrape_data()
 
 
 if __name__ == '__main__':
