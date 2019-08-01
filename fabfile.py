@@ -89,17 +89,6 @@ def cluster(c, command):
 @task
 def pyspark(c, cmdline=''):
     """Run PySpark executable."""
-
-    cmd = get_conda_env_script(c, 'pyspark', cfg.CONDA_ENV_NAME)
-    if cmd is None:
-        raise ValueError('Unable to find executable for "pyspark"')
-    else:
-        c.run(f'{cmd} {cmdline}', replace_env=False, pty=(not is_windows()))
-
-
-@task
-def pyspark(c, cmdline=''):
-    """Run PySpark executable."""
     import fabricutils as fu
     envdir = fu.get_conda_env_path(c, cfg.CONDA_ENV_NAME)
     python = fu.get_python_script_path(c, envdir, 'python')
@@ -109,4 +98,3 @@ def pyspark(c, cmdline=''):
         c.run(f'{pyspark} {cmdline}', env=env, replace_env=False, pty=(not fu.is_windows()), echo=True)
     else:
         raise ValueError('Unable to find executable for "pyspark"')
-
