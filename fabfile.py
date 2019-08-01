@@ -76,6 +76,15 @@ def cluster(c, command):
 
     cloudsdk(c, f'gcloud dataproc clusters {cmdline}')
 
+@task
+def pyspark(c, cmdline=''):
+    """Run PySpark executable."""
+
+    cmd = get_conda_env_script(c, 'pyspark', cfg.CONDA_ENV_NAME)
+    if cmd is None:
+        raise ValueError('Unable to find executable for "pyspark"')
+    else:
+        c.run(f'{cmd} {cmdline}', replace_env=False, pty=(not is_windows()))
 
 # Utilities
 
@@ -118,3 +127,17 @@ def is_docker_toolbox(c) -> bool:
 def is_windows() -> bool:
     """Check if local OS is Windows."""
     return os.name == 'nt'
+
+
+def get_conda_env_script(c, script, env_name) -> Path:
+    """Get path to any script in specific anaconda environment."""
+
+    stream = io.StringIO()
+    c.run('conda info --envs --json', replace_env=False, out_stream=stream)
+    info = json.loads(stream.getvalue())
+    envdir = next(iter(p for p in (Path(s) for s in info['envs']) if p.name == env_name))
+    if is_windows():
+        pass
+    else:
+        cmd = envdir / 'bin' / script
+    return cmd if cmd.exists() else None

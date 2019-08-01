@@ -1,173 +1,73 @@
-import aiofiles
-from aiohttp import ClientSession
+"""
+Мой проект вторая часть
+Скрапинг напрямую в паркет
+
+=============
+The goal of this assignment is to start working on individual project.
+You need to find data source, and scrape it to Parquet file.
+It is recommended to scrape data asynchronously, in batches.
+Run this code with
+
+"""
+
+import aiohttp
 import asyncio
-from collections import defaultdict
-import csv
-import io
-from pathlib import Path
+from contextlib import closing
+import lxml.html
 import pyarrow as pa
 import pyarrow.parquet as pq
-import sys
-import tarfile
 from tqdm import tqdm
+
 import config as cfg
-
-PROJECT_ARCH = cfg.BUILDDIR / 'project02.tbz2'
-PROJECT_HTMLS = cfg.BUILDDIR / 'project02_html'
-PROJECT_PARQUET = cfg.BUILDDIR / 'project02.parquet'
-PROJECT_PARQUET_FILE = cfg.BUILDDIR / 'project02_data.parquet'
-
-PROJECT_LIST_FILES = (
-    cfg.DATADIR / 'project02' / 'forum_list.csv',
-    )
+from yahoo import read_symbols, YAHOO_HTMLS
 
 
-def scrape_data():
+DATA_FILE = cfg.BUILDDIR / 'data.parquet'
+
+
+# TODO: Привести с моему формату
+
+def scrape_data(dst=DATA_FILE, compression='BROTLI'):
     """Scrape custom data."""
-    encoding = 'utf-8'
-    compression = 'BROTLI'
-    names = ('symbol', 'html')
-
-    symbols = read_symbols()
-    progress = tqdm(total=len(symbols), file=sys.stdout, disable=False)
-    PROJECT_HTMLS.mkdir(parents=True, exist_ok=True)
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.1 Safari/605.1.15',
         }
+    symbols = read_symbols()
+    columns = ('symbol', 'sector', 'industry', 'employees', 'description')
+    schema = pa.schema([(col, pa.string()) for col in columns])
 
-    def read_batch():
-        batch = defaultdict(list)
+    def parse(text):
+        tree = lxml.html.fromstring(text)
+        row = {}
+        row['description'] = '\n'.join(tree.xpath('//section[h2//*[text()="Description"]]/p/text()'))
+        info = (tree.xpath('//div[@class="asset-profile-container"]//p[span[text()="Sector"]]') or [None])[0]
+        if info is not None:
+            row['sector'] = (info.xpath('./span[text()="Sector"]/following-sibling::span[1]/text()') or [''])[0]
+            row['industry'] = (info.xpath('./span[text()="Industry"]/following-sibling::span[1]/text()') or [''])[0]
+            row['employees'] = (info.xpath('./span[text()="Full Time Employees"]/following-sibling::span[1]/span/text()') or [''])[0].replace(',', '')
+        return row
 
-        async def fetch(symbol, session, batch):
-            async with session.get(f'https://forum.bits.media/index.php?/topic/{symbol}/') as response:
-                text = await response.read()
-                batch['symbol'].append(symbol)
-                batch['html'].append(text.decode(encoding))
-                progress.update(1)
+    async def fetch(symbol, session, progress):
+        async with session.get(f'https://finance.yahoo.com/quote/{symbol}/profile?p={symbol}') as response:
+            text = await response.read()
+            row = {'symbol': symbol}
+            row.update(parse(text))
+            progress.update()
+            return row
 
+    async def run(symbols, writer, progress, batch_size=1000):
+        async with aiohttp.ClientSession(headers=headers) as session:
+            start, stop = 0, batch_size
+            while start < len(symbols):
+                tasks = (asyncio.ensure_future(fetch(symbol, session, progress)) for symbol in symbols[start:stop])
+                rows = await asyncio.gather(*tasks)
+                table = pa.Table.from_arrays([pa.array(row.get(col, '') for row in rows) for col in columns], schema=schema)
+                writer.write_table(table)
+                start, stop = stop, stop + batch_size
 
-        async def run(symbols):
-
-            async with ClientSession(headers=headers) as session:
-                tasks = (asyncio.ensure_future(fetch(symbol, session, batch)) for symbol in symbols)
-                await asyncio.gather(*tasks)
-
-
+    with tqdm(total=len(symbols)) as progress:
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(lambda x, y: None)  # suppress exceptions because of bug in Python 3.7.3 + aiohttp + asyncio
-        loop.run_until_complete(asyncio.ensure_future(run(symbols)))
-        progress.close()
-
-        yield pa.Table.from_arrays([pa.array(batch[n]) for n in names], names)
-
-
-    writer = None
-    for batch in read_batch():
-        if writer is None:
-            writer = pq.ParquetWriter(PROJECT_PARQUET, batch.schema, use_dictionary=False, compression=compression,
-                                      flavor={'spark'})
-        writer.write_table(batch)
-    writer.close()
-
-
-
-def read_symbols():
-    """Read symbols from FORUM Lists dataset"""
-
-    symbols = set()
-
-    for filename in PROJECT_LIST_FILES:
-        with open(filename) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                symbols.add(row['topic_id'].upper().strip())
-
-    return list(sorted(symbols))
-
-
-def scrape_descriptions_async():
-    """Scrape companies descriptions asynchronously."""
-
-    symbols = read_symbols()
-    progress = tqdm(total=len(symbols), file=sys.stdout, disable=False)
-    PROJECT_HTMLS.mkdir(parents=True, exist_ok=True)
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36',
-        }
-
-    async def fetch(symbol, session):
-        async with session.get(f'https://forum.bits.media/index.php?/topic/{symbol}/') as response:
-            text = await response.read()
-            async with aiofiles.open(PROJECT_HTMLS / f'{symbol}.html', 'wb') as f:
-                await f.write(text)
-            progress.update(1)
-
-
-    async def run(symbols):
-        async with ClientSession(headers=headers) as session:
-            tasks = (asyncio.ensure_future(fetch(symbol, session)) for symbol in symbols)
-            await asyncio.gather(*tasks)
-
-    loop = asyncio.get_event_loop()
-    loop.set_exception_handler(lambda x, y: None)  # suppress exceptions because of bug in Python 3.7.3 + aiohttp + asyncio
-    loop.run_until_complete(asyncio.ensure_future(run(symbols)))
-    progress.close()
-
-
-def compress_descriptions(encoding='utf-8', batch_size=1000, compression='BROTLI'):
-    """Convert tarfile to parquet"""
-
-    names = ('symbol', 'html')
-
-    def read_incremental():
-        """Incremental generator of batches"""
-        with tarfile.open(PROJECT_ARCH) as archive:
-            batch = defaultdict(list)
-            for member in tqdm(archive):
-                if member.isfile() and member.name.endswith('.html'):
-                    batch['symbol'].append(Path(member.name).stem)
-                    batch['html'].append(archive.extractfile(member).read().decode(encoding))
-                    if len(batch['symbol']) >= batch_size:
-                        yield pa.Table.from_arrays([pa.array(batch[n]) for n in names], names)
-                        batch = defaultdict(list)
-            if batch:
-                yield pa.Table.from_arrays([pa.array(batch[n]) for n in names], names)  # last partial batch
-
-    writer = None
-    for batch in read_incremental():
-        if writer is None:
-            writer = pq.ParquetWriter(PROJECT_PARQUET, batch.schema, use_dictionary=False, compression=compression, flavor={'spark'})
-        writer.write_table(batch)
-    writer.close()
-
-
-def decompress_descriptions(encoding='utf-8'):
-    """Convert parquet to tarfile"""
-
-    pf = pq.ParquetFile(PROJECT_PARQUET_FILE)
-
-    progress = tqdm(file=sys.stdout, disable=False)
-
-    with tarfile.open(PROJECT_ARCH, 'w:bz2') as archive:
-        for i in range(pf.metadata.num_row_groups):
-            table = pf.read_row_group(i)
-            columns = table.to_pydict()
-            for symbol, html in zip(columns['symbol'], columns['html']):
-                bytes = html.encode(encoding)
-                s = io.BytesIO(bytes)
-                tarinfo = tarfile.TarInfo(name=f'topic/{symbol}.html')
-                tarinfo.size = len(bytes)
-                archive.addfile(tarinfo=tarinfo, fileobj=s)
-                progress.update(1)
-
-    progress.close()
-
-
-def main():
-    scrape_descriptions_async()
-
-
-if __name__ == '__main__':
-    main()
+        with closing(pq.ParquetWriter(dst, schema, use_dictionary=False, compression=compression, flavor={'spark'})) as writer:
+            loop.run_until_complete(asyncio.ensure_future(run(symbols, writer, progress)))

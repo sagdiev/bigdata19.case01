@@ -17,7 +17,7 @@ DATA_FILE = cfg.BUILDDIR / 'data.parquet'
 
 def scrape_data():
     "Scrape custom data."
-    # todo
+
 """
 
 import aiofiles
