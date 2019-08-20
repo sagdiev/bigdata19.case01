@@ -25,11 +25,11 @@ def main():
     remove_stopwords = StopWordsRemover(inputCol='words_all', outputCol='words_clean').setStopWords(stopwords)
 
     # get words frequency using simple count (bag of words)
-    add_wordcount = CountVectorizer(inputCol='words_clean', outputCol='words_count', vocabSize=10000, minDF=5)
+    add_wordcount = CountVectorizer(inputCol='words_clean', outputCol='words_count', vocabSize=700, minDF=5)
 
     # get tf-idf words frequencies
 
-    add_wordtf = HashingTF(inputCol='words_clean', outputCol='words_tf', numFeatures=10000)
+    add_wordtf = HashingTF(inputCol='words_clean', outputCol='words_tf', numFeatures=700)
     add_wordidf = IDF(inputCol='words_tf', outputCol='words_tfidf', minDocFreq=5)
 
     # prepare output values
