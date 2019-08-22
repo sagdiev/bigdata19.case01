@@ -78,6 +78,8 @@ def main():
         estimator=logistic_wordcount,
         estimatorParamMaps=grid,
         numFolds=5,
+        evaluator=evaluator,
+        seed=100500,
         )
     model_cv = cv.fit(prepared)
     breakpoint()
