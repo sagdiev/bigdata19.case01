@@ -9,6 +9,8 @@ from pyspark.sql import SQLContext
 
 from config import BUILDDIR, DATADIR
 
+FINAL_MODEL = BUILDDIR / 'model_cv'
+
 
 spark = SQLContext(SparkContext.getOrCreate())
 
@@ -68,23 +70,27 @@ def main():
         predicted = model.fit(training).transform(testing)
         print(f'{name} model accuracy = {evaluator.evaluate(predicted)}')
 
-    # # fit hyperparameters
-    # grid = (ParamGridBuilder()
-    #     .addGrid(logistic_wordcount.regParam, [0.1, 0.2, 0.3, 0.4])
-    #     .addGrid(logistic_wordcount.elasticNetParam, [0.0, 0.1, 0.2, 0.3])
-    #     .build()
-    #     )
-    # evaluator = MulticlassClassificationEvaluator(predictionCol='prediction', metricName='accuracy')
-    # cv = CrossValidator(
-    #     estimator=logistic_wordcount,
-    #     estimatorParamMaps=grid,
-    #     numFolds=5,
-    #     evaluator=evaluator,
-    #     seed=100500,
-    #     )
-    # model_cv = cv.fit(prepared) # model_cv = CrossValidatorModel.load('build/model_cv')
-    # breakpoint()
-    # model_cv.save('build/model_cv')
+
+    # fit hyperparameters
+    grid = (ParamGridBuilder()
+        .addGrid(logistic_wordcount.regParam, [0.1, 0.2, 0.3, 0.4])
+        .addGrid(logistic_wordcount.elasticNetParam, [0.0, 0.1, 0.2, 0.3])
+        .build()
+        )
+    evaluator = MulticlassClassificationEvaluator(predictionCol='prediction', metricName='accuracy')
+    cv = CrossValidator(
+        estimator=logistic_wordcount,
+        estimatorParamMaps=grid,
+        numFolds=5,
+        evaluator=evaluator,
+        seed=100500,
+        )
+    if not FINAL_MODEL.exists():
+        model_cv = cv.fit(prepared)
+        model_cv.save(str(FINAL_MODEL))
+    else:
+        model_cv = CrossValidatorModel.load(str(FINAL_MODEL))
+    breakpoint()
 
 
 if __name__ == '__main__':
