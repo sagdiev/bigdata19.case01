@@ -90,6 +90,8 @@ def main():
         model_cv.save(str(FINAL_MODEL))
     else:
         model_cv = CrossValidatorModel.load(str(FINAL_MODEL))
+        #predicted_cv = model_cv.bestModel.transform(testing)
+        #model_cv.getEvaluator().evaluate(predicted_cv)
     breakpoint()
 
 
